@@ -47,11 +47,11 @@ sudo make install
 
 ### 运行
 
-设置bucket name, username/password信息，将其存放在/etc/passwd-upyunfs 文件中，
+设置username/password信息，将其存放在/etc/passwd-upyunfs 文件中，
 注意这个文件的权限必须正确设置，建议设为640。
 
 ```
-echo my-bucket:my-username:my-password > /etc/passwd-upyunfs
+echo my-username:my-password > /etc/passwd-upyunfs
 chmod 640 /etc/passwd-upyunfs
 ```
 
