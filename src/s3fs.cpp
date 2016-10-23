@@ -357,7 +357,7 @@ static int get_object_attribute(const char* path, struct stat* pstbuf, headers_t
   struct stat* pstat = pstbuf ? pstbuf : &tmpstbuf;
   headers_t    tmpHead;
   headers_t*   pheader = pmeta ? pmeta : &tmpHead;
-  string       strpath;
+  string       strpath = path;
   S3fsCurl     s3fscurl;
   bool         forcedir = false;
   string::size_type Pos;
