@@ -2509,7 +2509,18 @@ static int set_xattrs_to_header(headers_t& meta, const char* name, const char* v
     // found xattr header but flags is only creating, so failure.
     return -EEXIST;
   }
-  strxattrs = iter->second;
+  if(meta.end() == (iter = meta.find("X-Upyun-Meta-X"))){
+    if(XATTR_REPLACE == (flags & XATTR_REPLACE)){
+    // there is no xattr header but flags is replace, so failure.
+	  return -ENOATTR;
+    }
+  }else{
+    if(XATTR_CREATE == (flags & XATTR_CREATE)){
+      // found xattr header but flags is only creating, so failure.
+      return -EEXIST;
+    }
+    strxattrs = iter->second;
+  }
 
   // get map as xattrs_t
   parse_xattrs(strxattrs, xattrs);
