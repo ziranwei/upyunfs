@@ -3344,13 +3344,21 @@ static int read_passwd_file(void)
       // does the bucket we are mounting match this passwd file entry?
       // if so, use that key pair, otherwise use the default key, if found,
       // will be used
-      if(field1.size() != 0 && field1 == bucket){
-        if(!S3fsCurl::SetAccessKey(field2.c_str(), field3.c_str())){
-          S3FS_PRN_EXIT("if one access key is specified, both keys need to be specified.");
-          return EXIT_FAILURE;
-        }
-        break;
-      }
+      if(field1.size() != 0){
+		if(field1 == bucket) {
+          if(!S3fsCurl::SetAccessKey(field2.c_str(), field3.c_str())){
+            S3FS_PRN_EXIT("if one access key is specified, both keys need to be specified.");
+            return EXIT_FAILURE;
+          }
+          break;
+		} else {
+          if(!S3fsCurl::SetAccessKey(field1.c_str(), field2.c_str(), field3.c_str())){
+            S3FS_PRN_EXIT("if one access key is specified, both keys need to be specified.");
+            return EXIT_FAILURE;
+          }
+          break;
+		}	
+	  }
     }
   }
   return EXIT_SUCCESS;

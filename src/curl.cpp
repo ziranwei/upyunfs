@@ -309,6 +309,7 @@ bool             S3fsCurl::is_content_md5      = false;
 bool             S3fsCurl::is_verbose          = false;
 string           S3fsCurl::UpYunUsername;
 string           S3fsCurl::UpYunPassword;
+std::string      S3fsCurl::UpYunFormApSecret;
 long             S3fsCurl::ssl_verify_hostname = 1;    // default(original code...)
 curltime_t       S3fsCurl::curl_times;
 curlprogress_t   S3fsCurl::curl_progress;
@@ -1050,13 +1051,16 @@ bool S3fsCurl::SetVerbose(bool flag)
   return old;
 }
 
-bool S3fsCurl::SetAccessKey(const char* username, const char* password)
+bool S3fsCurl::SetAccessKey(const char* username, const char* password, const char *FormApiSecret)
 {
   if(!username || '\0' == username[0] || !password || '\0' == password[0]){
     return false;
   }
   UpYunUsername = username;
   UpYunPassword = password;
+  if(FormApiSecret != NULL)
+    UpYunFormApSecret = FormApiSecret;
+
   return true;
 }
 

@@ -225,6 +225,7 @@ class S3fsCurl
     static bool             is_verbose;
     static std::string      UpYunUsername;
     static std::string      UpYunPassword;
+    static std::string      UpYunFormApSecret;
     static long             ssl_verify_hostname;
     static curltime_t       curl_times;
     static curlprogress_t   curl_progress;
@@ -348,7 +349,7 @@ class S3fsCurl
     static bool SetContentMd5(bool flag);
     static bool SetVerbose(bool flag);
     static bool GetVerbose(void) { return S3fsCurl::is_verbose; }
-    static bool SetAccessKey(const char* AccessKeyId, const char* SecretAccessKey);
+    static bool SetAccessKey(const char* AccessKeyId, const char* SecretAccessKey, const char *FormApiSecret = NULL);
     static bool IsSetAccessKeyId(void){
                   return (0 < S3fsCurl::UpYunUsername.size() && 0 < S3fsCurl::UpYunPassword.size());
                 }
