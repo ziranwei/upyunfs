@@ -86,6 +86,7 @@ typedef std::list<UNCOMP_MP_INFO> uncomp_mp_list_t;
 bool foreground                   = false;
 bool nomultipart                  = false;
 bool pathrequeststyle             = false;
+bool noxattr                      = false;
 std::string program_name;
 std::string service_path          = "/";
 std::string host                  = "http://api.upyun.com";
@@ -2509,7 +2510,18 @@ static int set_xattrs_to_header(headers_t& meta, const char* name, const char* v
     // found xattr header but flags is only creating, so failure.
     return -EEXIST;
   }
-  strxattrs = iter->second;
+  if(meta.end() == (iter = meta.find("X-Upyun-Meta-X"))){
+    if(XATTR_REPLACE == (flags & XATTR_REPLACE)){
+    // there is no xattr header but flags is replace, so failure.
+	  return -ENOATTR;
+    }
+  }else{
+    if(XATTR_CREATE == (flags & XATTR_CREATE)){
+      // found xattr header but flags is only creating, so failure.
+      return -EEXIST;
+    }
+    strxattrs = iter->second;
+  }
 
   // get map as xattrs_t
   parse_xattrs(strxattrs, xattrs);
@@ -2546,6 +2558,11 @@ static int s3fs_setxattr(const char* path, const char* name, const char* value, 
 static int s3fs_setxattr(const char* path, const char* name, const char* value, size_t size, int flags)
 #endif
 {
+  if (noxattr) {
+	S3FS_PRN_WARN("XATTR DISABLED: [path=%s][name=%s][value=%p][size=%zu][flags=%d]", path, name, value, size, flags);
+    return 0;
+  }
+
   S3FS_PRN_INFO("[path=%s][name=%s][value=%p][size=%zu][flags=%d]", path, name, value, size, flags);
 
   if((value && 0 == size) || (!value && 0 < size)){
@@ -2636,6 +2653,11 @@ static int s3fs_getxattr(const char* path, const char* name, char* value, size_t
 static int s3fs_getxattr(const char* path, const char* name, char* value, size_t size)
 #endif
 {
+  if (noxattr) {
+	S3FS_PRN_WARN("XATTR DISABLED: [path=%s][name=%s][value=%p][size=%zu]", path, name, value, size);
+    return 0;
+  }
+
   S3FS_PRN_INFO("[path=%s][name=%s][value=%p][size=%zu]", path, name, value, size);
 
   if(!path || !name){
@@ -3643,6 +3665,10 @@ static int my_fuse_opt_proc(void* data, const char* arg, int key, struct fuse_ar
     }
     if(0 == strcmp(arg, "nomultipart")){
       nomultipart = true;
+      return 0;
+    }
+    if(0 == strcmp(arg, "noxattr")){
+      noxattr = true;
       return 0;
     }
     // old format for storage_class
