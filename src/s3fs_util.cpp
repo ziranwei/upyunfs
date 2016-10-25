@@ -1074,6 +1074,8 @@ void show_help (void)
     "      mount point by this option like umask.\n"
     "\n"
     "   nomultipart (disable multipart uploads)\n"
+	"\n"
+	"   noxattr (disable xattr)\n"
     "\n"
     "   enable_content_md5 (default is disable)\n"
     "      - ensure data integrity during writes with MD5 hash.\n"
