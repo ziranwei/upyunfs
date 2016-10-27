@@ -1070,26 +1070,12 @@ int FdEntity::Load(off_t start, size_t size)
       }
       size_t over_size = (*iter)->bytes - need_load_size;
 
-      // download
-      if(static_cast<size_t>(2 * S3fsCurl::GetMultipartSize()) < need_load_size && !nomultipart){ // default 20MB
-        // parallel request
-        // Additional time is needed for large files
-        time_t backup = 0;
-        if(120 > S3fsCurl::GetReadwriteTimeout()){
-          backup = S3fsCurl::SetReadwriteTimeout(120);
-        }
-        result = S3fsCurl::ParallelGetObjectRequest(path.c_str(), fd, (*iter)->offset, need_load_size);
-        if(0 != backup){
-          S3fsCurl::SetReadwriteTimeout(backup);
-        }
+      // single request download
+      if(0 < need_load_size){
+        S3fsCurl s3fscurl;
+        result = s3fscurl.GetObjectRequest(path.c_str(), fd, (*iter)->offset, need_load_size);
       }else{
-        // single request
-        if(0 < need_load_size){
-          S3fsCurl s3fscurl;
-          result = s3fscurl.GetObjectRequest(path.c_str(), fd, (*iter)->offset, need_load_size);
-        }else{
-          result = 0;
-        }
+        result = 0;
       }
       if(0 != result){
         break;
@@ -1505,16 +1491,7 @@ ssize_t FdEntity::Read(char* bytes, off_t start, size_t size, bool force_load)
     }
 
     // load size(for prefetch)
-    size_t load_size = size;
-    if(static_cast<size_t>(start + size) < pagelist.Size()){
-      size_t prefetch_max_size = max(size, static_cast<size_t>(S3fsCurl::GetMultipartSize() * S3fsCurl::GetMaxParallelCount()));
-
-      if(static_cast<size_t>(start + prefetch_max_size) < pagelist.Size()){
-        load_size = prefetch_max_size;
-      }else{
-        load_size = static_cast<size_t>(pagelist.Size() - start);
-      }
-    }
+    size_t load_size = pagelist.Size();
     // Loading
     if(0 < size && 0 != (result = Load(start, load_size))){
       S3FS_PRN_ERR("could not download. start(%jd), size(%zu), errno(%d)", (intmax_t)start, size, result);
