@@ -396,6 +396,10 @@ class S3fsCurl
     int MultipartUploadRequest(const std::string& upload_id, const char* tpath, int fd, off_t offset, size_t size, etaglist_t& list);
     int MultipartRenameRequest(const char* from, const char* to, headers_t& meta, off_t size);
     
+    int PreMultipartPutRequest(const char* tpath, headers_t& meta, std::string& multi_uuid, std::string& next_part_id, int fd);
+    int UploadMultipartPutSetup(const char* tpath, const std::string& multi_uuid, std::string& next_part_id);
+    int CompleteMultipartPutRequest(const char* tpath, const std::string& multi_uuid);
+    
     // methods(valiables)
     CURL* GetCurlHandle(void) const { return hCurl; }
     std::string GetPath(void) const { return path; }

@@ -1151,7 +1151,8 @@ S3fsCurl* S3fsCurl::UploadMultipartPostRetryCallback(S3fsCurl* s3fscurl)
 int S3fsCurl::ParallelMultipartUploadRequest(const char* tpath, headers_t& meta, int fd)
 {
   int            result;
-  string         upload_id;
+  string         multi_uuid;
+  string         next_part_id;
   struct stat    st;
   int            fd2;
   etaglist_t     list;
@@ -1174,7 +1175,7 @@ int S3fsCurl::ParallelMultipartUploadRequest(const char* tpath, headers_t& meta,
     return -errno;
   }
 
-  if(0 != (result = s3fscurl.PreMultipartPostRequest(tpath, meta, upload_id, false))){
+  if(0 != (result = s3fscurl.PreMultipartPutRequest(tpath, meta, multi_uuid, next_part_id, fd2))){
     close(fd2);
     return result;
   }
@@ -1182,13 +1183,8 @@ int S3fsCurl::ParallelMultipartUploadRequest(const char* tpath, headers_t& meta,
 
   // cycle through open fd, pulling off 10MB chunks at a time
   for(remaining_bytes = st.st_size; 0 < remaining_bytes; ){
-    S3fsMultiCurl curlmulti;
     int           para_cnt;
     off_t         chunk;
-
-    // Initialize S3fsMultiCurl
-    curlmulti.SetSuccessCallback(S3fsCurl::UploadMultipartPostCallback);
-    curlmulti.SetRetryCallback(S3fsCurl::UploadMultipartPostRetryCallback);
 
     // Loop for setup parallel upload(multipart) request.
     for(para_cnt = 0; para_cnt < S3fsCurl::max_parallel_cnt && 0 < remaining_bytes; para_cnt++, remaining_bytes -= chunk){
@@ -1202,37 +1198,20 @@ int S3fsCurl::ParallelMultipartUploadRequest(const char* tpath, headers_t& meta,
       s3fscurl_para->partdata.size       = chunk;
       s3fscurl_para->b_partdata_startpos = s3fscurl_para->partdata.startpos;
       s3fscurl_para->b_partdata_size     = s3fscurl_para->partdata.size;
-      s3fscurl_para->partdata.add_etag_list(&list);
 
       // initiate upload part for parallel
-      if(0 != (result = s3fscurl_para->UploadMultipartPostSetup(tpath, list.size(), upload_id))){
+      if(0 != (result = s3fscurl_para->UploadMultipartPutSetup(tpath, multi_uuid, next_part_id))){
         S3FS_PRN_ERR("failed uploading part setup(%d)", result);
         close(fd2);
         delete s3fscurl_para;
         return result;
       }
-
-      // set into parallel object
-      if(!curlmulti.SetS3fsCurlObject(s3fscurl_para)){
-        S3FS_PRN_ERR("Could not make curl object into multi curl(%s).", tpath);
-        close(fd2);
-        delete s3fscurl_para;
-        return -1;
-      }
+      s3fscurl.DestroyCurlHandle();
     }
-
-    // Multi request
-    if(0 != (result = curlmulti.Request())){
-      S3FS_PRN_ERR("error occuered in multi request(errno=%d).", result);
-      break;
-    }
-
-    // reinit for loop.
-    curlmulti.Clear();
   }
   close(fd2);
 
-  if(0 != (result = s3fscurl.CompleteMultipartPostRequest(tpath, upload_id, list))){
+  if(0 != (result = s3fscurl.CompleteMultipartPutRequest(tpath, multi_uuid))){
     return result;
   }
   return 0;
@@ -1638,35 +1617,38 @@ bool S3fsCurl::RemakeHandle(void)
 
     case REQTYPE_PREMULTIPOST:
       curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
-      curl_easy_setopt(hCurl, CURLOPT_POST, true);
+      curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);                // HTTP PUT
       curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
       curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-      curl_easy_setopt(hCurl, CURLOPT_POSTFIELDSIZE, 0);
       curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
+      curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);             // Content-Length: 0
+      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
+      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
+
       break;
 
     case REQTYPE_COMPLETEMULTIPOST:
       curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
-      curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
-      curl_easy_setopt(hCurl, CURLOPT_POST, true);
+      curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);                // HTTP PUT
       curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
       curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-      curl_easy_setopt(hCurl, CURLOPT_POSTFIELDSIZE, static_cast<curl_off_t>(postdata_remaining));
-      curl_easy_setopt(hCurl, CURLOPT_READDATA, (void*)this);
-      curl_easy_setopt(hCurl, CURLOPT_READFUNCTION, S3fsCurl::ReadCallback);
+      curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
+      curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);             // Content-Length: 0
+      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
+      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
       break;
 
     case REQTYPE_UPLOADMULTIPOST:
       curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
-      curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);
+      curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);                // HTTP PUT
       curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
       curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)headdata);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, WriteMemoryCallback);
-      curl_easy_setopt(hCurl, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(partdata.size));
+      curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
+      curl_easy_setopt(hCurl, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(partdata.size)); // Content-Length
+      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
+      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
       curl_easy_setopt(hCurl, CURLOPT_READFUNCTION, S3fsCurl::UploadReadCallback);
       curl_easy_setopt(hCurl, CURLOPT_READDATA, (void*)this);
-      curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
       break;
 
     case REQTYPE_COPYMULTIPOST:
@@ -1729,6 +1711,16 @@ int S3fsCurl::RequestPerform(void)
         if(400 > LastResponseCode){
           S3FS_PRN_INFO3("HTTP response code %ld", LastResponseCode);
           return 0;
+        }
+        if(503 == LastResponseCode) {
+          unsigned long error_code;
+          if(GetXErrorCode(error_code)) {
+            if(error_code == 50300020) {
+              S3FS_PRN_INFO3("HTTP response code %ld, error_code: %lu", LastResponseCode, error_code);
+              sleep(4);
+              break;
+            }
+          }
         }
         if(500 <= LastResponseCode){
           S3FS_PRN_INFO3("HTTP response code %ld", LastResponseCode);
@@ -2552,6 +2544,112 @@ int S3fsCurl::ListBucketRequest(const char* tpath, const char* query)
 // Initialize multipart upload
 //
 // Example :
+//   POST /example-object HTTP/1.1
+//   Host: v0.api.upyun.com
+//   Date: Mon, 1 Nov 2010 20:34:56 GMT
+//   Authorization: UpYun VGhpcyBtZXNzYWdlIHNpZ25lZCBieSBlbHZpbmc=
+//
+int S3fsCurl::PreMultipartPutRequest(const char* tpath, headers_t& meta, string& multi_uuid, string& next_part_id, int fd)
+{
+  struct stat st;
+  FILE*       file = NULL;
+  int         fd2;
+
+  S3FS_PRN_INFO3("[tpath=%s]", SAFESTRPTR(tpath));
+
+  if(!tpath){
+    return -1;
+  }
+  if(-1 != fd){
+    // duplicate fd
+    if(-1 == (fd2 = dup(fd)) || -1 == fstat(fd2, &st) || 0 != lseek(fd2, 0, SEEK_SET) || NULL == (file = fdopen(fd2, "rb"))){
+      S3FS_PRN_ERR("Could not duplicate file descriptor(errno=%d)", errno);
+      if(-1 != fd2){
+        close(fd2);
+      }
+      return -errno;
+    }
+    b_infile = file;
+  }else{
+    // This case is creating zero byte obejct.(calling by create_file_object())
+    S3FS_PRN_INFO3("create zero byte file object.");
+  }
+
+  if(!CreateCurlHandle(true)){
+    if(file){
+      fclose(file);
+    }
+    return -1;
+  }
+  string resource;
+  string turl;
+  MakeUrlResource(get_realpath(tpath).c_str(), resource, turl);
+
+  url             = prepare_url(turl.c_str());
+  path            = get_realpath(tpath);
+  requestHeaders  = NULL;
+  responseHeaders.clear();
+  bodydata        = new BodyData();
+
+  // Make request headers
+
+  string ContentType = S3fsCurl::LookupMimeType(string(tpath));
+  stringstream ss;
+  ss << static_cast<unsigned long>(st.st_size);
+
+  string date    = get_date_rfc850();
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "Date", date.c_str());
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "Accept", NULL);
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Multi-Stage", "initiate");
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Multi-Type", ContentType.c_str());
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Multi-Length", ss.str().c_str());
+
+  if(!S3fsCurl::IsPublicBucket()){
+    string Signature = CalcSignatureV2("PUT", "", "", date, resource);
+    requestHeaders   = curl_slist_sort_insert(requestHeaders, "Authorization", string("UpYun " + UpYunUsername + ":" + Signature).c_str());
+  }
+
+  // setopt
+  curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);                // HTTP PUT
+  curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
+  curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+  curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
+  curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);             // Content-Length: 0
+  curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
+  curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
+
+  type = REQTYPE_PREMULTIPOST;
+
+  // request
+  int result;
+  if(0 != (result = RequestPerform())){
+    delete bodydata;
+    bodydata = NULL;
+    return result;
+  }
+
+  if(!S3fsCurl::GetMultiUUID(multi_uuid)){
+    delete bodydata;
+    bodydata = NULL;
+    return -1;
+  }
+  if(!S3fsCurl::GetNextPartID(next_part_id)){
+    delete bodydata;
+    bodydata = NULL;
+    return -1;
+  }
+
+  delete bodydata;
+  bodydata = NULL;
+  return 0;
+}
+
+
+//
+// Initialize multipart upload
+//
+// Example :
 //   POST /example-object?uploads HTTP/1.1
 //   Host: example-bucket.s3.amazonaws.com
 //   Date: Mon, 1 Nov 2010 20:34:56 GMT
@@ -2666,6 +2764,65 @@ int S3fsCurl::PreMultipartPostRequest(const char* tpath, headers_t& meta, string
     delete bodydata;
     bodydata = NULL;
     return -1;
+  }
+
+  delete bodydata;
+  bodydata = NULL;
+  return 0;
+}
+    
+int S3fsCurl::CompleteMultipartPutRequest(const char* tpath, const std::string& multi_uuid) 
+{
+  S3FS_PRN_INFO3("[tpath=%s]", SAFESTRPTR(tpath));
+
+  if(!tpath){
+    return -1;
+  }
+
+  if(!CreateCurlHandle(true)){
+    return -1;
+  }
+  string resource;
+  string turl;
+  MakeUrlResource(get_realpath(tpath).c_str(), resource, turl);
+
+  url             = prepare_url(turl.c_str());
+  path            = get_realpath(tpath);
+  requestHeaders  = NULL;
+  responseHeaders.clear();
+  bodydata        = new BodyData();
+
+  // Make request headers
+
+  string date    = get_date_rfc850();
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "Date", date.c_str());
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "Accept", NULL);
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Multi-Stage", "complete");
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Multi-UUID", multi_uuid.c_str());
+
+  if(!S3fsCurl::IsPublicBucket()){
+    string Signature = CalcSignatureV2("PUT", "", "", date, resource);
+    requestHeaders   = curl_slist_sort_insert(requestHeaders, "Authorization", string("UpYun " + UpYunUsername + ":" + Signature).c_str());
+  }
+
+  // setopt
+  curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);                // HTTP PUT
+  curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
+  curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+  curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
+  curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);             // Content-Length: 0
+  curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
+  curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
+
+  type = REQTYPE_COMPLETEMULTIPOST;
+
+  // request
+  int result;
+  if(0 != (result = RequestPerform())){
+    delete bodydata;
+    bodydata = NULL;
+    return result;
   }
 
   delete bodydata;
@@ -2839,6 +2996,75 @@ int S3fsCurl::AbortMultipartUpload(const char* tpath, string& upload_id)
   return RequestPerform();
 }
 
+int S3fsCurl::UploadMultipartPutSetup(const char* tpath, const std::string& multi_uuid, std::string& next_part_id) 
+{
+  S3FS_PRN_INFO3("[tpath=%s][start=%jd][size=%zd][part=%s]", SAFESTRPTR(tpath), (intmax_t)(partdata.startpos), partdata.size, next_part_id.c_str());
+
+  if(-1 == partdata.fd || -1 == partdata.startpos || -1 == partdata.size || !tpath){
+    return -1;
+  }
+
+  if(!CreateCurlHandle(true)){
+    return -1;
+  }
+  string resource;
+  string turl;
+  MakeUrlResource(get_realpath(tpath).c_str(), resource, turl);
+
+  url             = prepare_url(turl.c_str());
+  path            = get_realpath(tpath);
+  requestHeaders  = NULL;
+  responseHeaders.clear();
+  bodydata        = new BodyData();
+
+  // Make request headers
+  string date    = get_date_rfc850();
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "Date", date.c_str());
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "Accept", NULL);
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Multi-Stage", "upload");
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Multi-UUID", multi_uuid.c_str());
+  requestHeaders = curl_slist_sort_insert(requestHeaders, "X-Upyun-Part-ID", next_part_id.c_str());
+
+  if(!S3fsCurl::IsPublicBucket()){
+    stringstream ss;
+    ss << static_cast<curl_off_t>(partdata.size);
+    string Signature = CalcSignatureV2("PUT", "", "", date, resource, ss.str());
+    requestHeaders   = curl_slist_sort_insert(requestHeaders, "Authorization", string("UpYun " + UpYunUsername + ":" + Signature).c_str());
+  }
+
+  // setopt
+  curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);                // HTTP PUT
+  curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
+  curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+  curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
+  curl_easy_setopt(hCurl, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(partdata.size)); // Content-Length
+  curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
+  curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
+  curl_easy_setopt(hCurl, CURLOPT_READFUNCTION, S3fsCurl::UploadReadCallback);
+  curl_easy_setopt(hCurl, CURLOPT_READDATA, (void*)this);
+
+  type = REQTYPE_UPLOADMULTIPOST;
+
+  // request
+  int result;
+  if(0 != (result = RequestPerform())){
+    delete bodydata;
+    bodydata = NULL;
+    return result;
+  }
+
+  if(!S3fsCurl::GetNextPartID(next_part_id)){
+    delete bodydata;
+    bodydata = NULL;
+    return -1;
+  }
+
+  delete bodydata;
+  bodydata = NULL;
+  return 0;
+
+}
 //
 // PUT /ObjectName?partNumber=PartNumber&uploadId=UploadId HTTP/1.1
 // Host: BucketName.s3.amazonaws.com
