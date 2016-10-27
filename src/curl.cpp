@@ -1708,9 +1708,10 @@ int S3fsCurl::RequestPerform(void)
           S3FS_PRN_ERR("curl_easy_getinfo failed while trying to retrieve HTTP response code");
           return -EIO;
         }
-        if(400 > LastResponseCode){
+        if(429 == LastResponseCode) {
           S3FS_PRN_INFO3("HTTP response code %ld", LastResponseCode);
-          return 0;
+          sleep(4);
+          break; 
         }
         if(503 == LastResponseCode) {
           unsigned long error_code;
@@ -1721,6 +1722,10 @@ int S3fsCurl::RequestPerform(void)
               break;
             }
           }
+        }
+        if(400 > LastResponseCode){
+          S3FS_PRN_INFO3("HTTP response code %ld", LastResponseCode);
+          return 0;
         }
         if(500 <= LastResponseCode){
           S3FS_PRN_INFO3("HTTP response code %ld", LastResponseCode);
