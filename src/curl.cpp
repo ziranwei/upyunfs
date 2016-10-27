@@ -278,7 +278,7 @@ void CurlHandlerPool::ReturnHandler(CURL* h)
 //-------------------------------------------------------------------
 // Class S3fsCurl
 //-------------------------------------------------------------------
-#define MULTIPART_SIZE              10485760          // 10MB
+#define MULTIPART_SIZE              1048576          // 1MB
 #define MAX_MULTI_COPY_SOURCE_SIZE  524288000         // 500MB
 
 // [NOTICE]
@@ -1915,6 +1915,43 @@ bool S3fsCurl::GetUploadId(string& upload_id)
   upload_id.clear();
 
   return result;
+}
+
+bool S3fsCurl::GetMultiUUID(string& multi_uuid)
+{
+  if(responseHeaders.find("X-Upyun-Multi-Uuid") != responseHeaders.end()){
+    multi_uuid = responseHeaders["X-Upyun-Multi-Uuid"];
+    return true;
+  }else if(responseHeaders.find("x-upyun-multi-uuid") != responseHeaders.end()){
+    multi_uuid = responseHeaders["x-upyun-multi-uuid"];
+    return true;
+  } 
+  multi_uuid.clear();
+
+  return false;
+}
+
+bool S3fsCurl::GetNextPartID(string& next_part_id)
+{
+  if(responseHeaders.find("X-Upyun-Next-Part-Id") != responseHeaders.end()){
+    next_part_id = responseHeaders["X-Upyun-Next-Part-Id"];
+    return true;
+  }else if(responseHeaders.find("x-upyun-next-part-id") != responseHeaders.end()){
+    next_part_id = responseHeaders["x-upyun-next-part-id"];
+    return true;
+  } 
+  next_part_id.clear();
+
+  return false;
+}
+ 
+bool S3fsCurl::GetXErrorCode(unsigned long &error_code) {
+  if(responseHeaders.find("X-Error-Code") != responseHeaders.end()){
+    error_code = atol(responseHeaders["X-Error-Code"].c_str());
+    return true;
+  } 
+
+  return false;
 }
 
 int S3fsCurl::DeleteRequest(const char* tpath)

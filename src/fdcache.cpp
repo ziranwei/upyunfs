@@ -1417,7 +1417,7 @@ int FdEntity::RowFlush(const char* tpath, bool force_sync)
       S3FS_PRN_ERR("fstat is failed by errno(%d), but continue...", errno);
     }
 
-    if(pagelist.Size() >= static_cast<size_t>(2 * S3fsCurl::GetMultipartSize()) && !nomultipart){ // default 20MB
+    if(pagelist.Size() >= static_cast<size_t>(S3fsCurl::GetMultipartSize()) && !nomultipart){ // default 1MB
       // Additional time is needed for large files
       time_t backup = 0;
       if(120 > S3fsCurl::GetReadwriteTimeout()){

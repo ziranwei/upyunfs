@@ -26,7 +26,7 @@
 //----------------------------------------------
 // Symbols
 //----------------------------------------------
-#define MIN_MULTIPART_SIZE          5242880           // 5MB
+#define MIN_MULTIPART_SIZE          524288           // 512KB
 
 //----------------------------------------------
 // class BodyData
@@ -306,6 +306,9 @@ class S3fsCurl
     std::string CalcSignatureV2(const std::string& method, const std::string& strMD5, const std::string& content_type, const std::string& date, const std::string& resource, const std::string &content_length = "0");
     std::string CalcSignature(const std::string& method, const std::string& canonical_uri, const std::string& query_string, const std::string& strdate, const std::string& payload_hash, const std::string& date8601);
     bool GetUploadId(std::string& upload_id);
+    bool GetMultiUUID(std::string& multi_uuid);
+    bool GetNextPartID(std::string& next_part_id);
+    bool GetXErrorCode(unsigned long &error_code);
 
     int UploadMultipartPostSetup(const char* tpath, int part_num, const std::string& upload_id);
     int CopyMultipartPostRequest(const char* from, const char* to, int part_num, std::string& upload_id, headers_t& meta);
@@ -392,7 +395,7 @@ class S3fsCurl
     int MultipartUploadRequest(const char* tpath, headers_t& meta, int fd, bool is_copy);
     int MultipartUploadRequest(const std::string& upload_id, const char* tpath, int fd, off_t offset, size_t size, etaglist_t& list);
     int MultipartRenameRequest(const char* from, const char* to, headers_t& meta, off_t size);
-
+    
     // methods(valiables)
     CURL* GetCurlHandle(void) const { return hCurl; }
     std::string GetPath(void) const { return path; }
