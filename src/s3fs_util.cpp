@@ -686,7 +686,7 @@ time_t get_mtime(const char *s)
 time_t get_mtime(headers_t& meta, bool overcheck)
 {
   headers_t::const_iterator iter;
-  if(meta.end() == (iter = meta.find("x-amz-meta-mtime"))){
+  if(meta.end() == (iter = meta.find("x-upyun-meta-mtime"))){
     if(overcheck){
       return get_lastmodified(meta);
     }
@@ -720,10 +720,10 @@ mode_t get_mode(headers_t& meta, const char* path, bool checkdir, bool forcedir)
   bool isS3sync = false;
   headers_t::const_iterator iter;
 
-  if(meta.end() != (iter = meta.find("x-amz-meta-mode"))){
+  if(meta.end() != (iter = meta.find("x-upyun-meta-mode"))){
     mode = get_mode((*iter).second.c_str());
   }else{
-    if(meta.end() != (iter = meta.find("x-amz-meta-permissions"))){ // for s3sync
+    if(meta.end() != (iter = meta.find("x-upyun-meta-permissions"))){ // for s3sync
       mode = get_mode((*iter).second.c_str());
       isS3sync = true;
     }
@@ -779,8 +779,8 @@ uid_t get_uid(const char *s)
 uid_t get_uid(headers_t& meta)
 {
   headers_t::const_iterator iter;
-  if(meta.end() == (iter = meta.find("x-amz-meta-uid"))){
-    if(meta.end() == (iter = meta.find("x-amz-meta-owner"))){ // for s3sync
+  if(meta.end() == (iter = meta.find("x-upyun-meta-uid"))){
+    if(meta.end() == (iter = meta.find("x-upyun-meta-owner"))){ // for s3sync
       return 0;
     }
   }
@@ -795,8 +795,8 @@ gid_t get_gid(const char *s)
 gid_t get_gid(headers_t& meta)
 {
   headers_t::const_iterator iter;
-  if(meta.end() == (iter = meta.find("x-amz-meta-gid"))){
-    if(meta.end() == (iter = meta.find("x-amz-meta-group"))){ // for s3sync
+  if(meta.end() == (iter = meta.find("x-upyun-meta-gid"))){
+    if(meta.end() == (iter = meta.find("x-upyun-meta-group"))){ // for s3sync
       return 0;
     }
   }
@@ -852,14 +852,14 @@ bool is_need_check_obj_detail(headers_t& meta)
   if(0 != get_size(meta)){
     return false;
   }
-  // if the object has x-amz-meta information, checking is no more.
-  if(meta.end() != meta.find("x-amz-meta-mode")  ||
-     meta.end() != meta.find("x-amz-meta-mtime") ||
-     meta.end() != meta.find("x-amz-meta-uid")   ||
-     meta.end() != meta.find("x-amz-meta-gid")   ||
-     meta.end() != meta.find("x-amz-meta-owner") ||
-     meta.end() != meta.find("x-amz-meta-group") ||
-     meta.end() != meta.find("x-amz-meta-permissions") )
+  // if the object has x-upyun-meta information, checking is no more.
+  if(meta.end() != meta.find("x-upyun-meta-mode")  ||
+     meta.end() != meta.find("x-upyun-meta-mtime") ||
+     meta.end() != meta.find("x-upyun-meta-uid")   ||
+     meta.end() != meta.find("x-upyun-meta-gid")   ||
+     meta.end() != meta.find("x-upyun-meta-owner") ||
+     meta.end() != meta.find("x-upyun-meta-group") ||
+     meta.end() != meta.find("x-upyun-meta-permissions") )
   {
     return false;
   }
@@ -1097,7 +1097,7 @@ void show_help (void)
     "        For a distributed object storage which is compatibility S3\n"
     "        API without PUT(copy api).\n"
     "        If you set this option, s3fs do not use PUT with \n"
-    "        \"x-amz-copy-source\"(copy api). Because traffic is increased\n"
+    "        \"x-upyun-copy-source\"(copy api). Because traffic is increased\n"
     "        2-3 times by this option, we do not recommend this.\n"
     "\n"
     "   norenameapi (for other incomplete compatibility object storage)\n"

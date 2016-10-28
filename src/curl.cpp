@@ -717,6 +717,8 @@ size_t S3fsCurl::HeaderCallback(void* data, size_t blockSize, size_t numBlocks, 
     transform(lkey.begin(), lkey.end(), lkey.begin(), static_cast<int (*)(int)>(std::tolower));
     if(lkey.compare(0, 7, "X-Upyun") == 0){
       key = lkey;
+    } else if(lkey.compare(0, 7, "x-upyun") == 0){
+      key = lkey;
     }
     string value;
     getline(ss, value);
@@ -2161,7 +2163,7 @@ int S3fsCurl::PutHeadRequest(const char* tpath, headers_t& meta, bool is_copy)
       requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
     //}else if(key.substr(0, 9) == "x-amz-acl"){
       // not set value, but after set it.
-    }else if(key.substr(0, 12) == "X-Upyun-Meta"){
+    }else if(key.substr(0, 12) == "x-upyun-meta"){
       requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
     //}else if(key == "x-amz-copy-source"){
     //  requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
@@ -2291,7 +2293,7 @@ int S3fsCurl::PutRequest(const char* tpath, headers_t& meta, int fd)
       requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
     //}else if(key.substr(0, 9) == "x-amz-acl"){
       // not set value, but after set it.
-    }else if(key.substr(0, 12) == "X-Upyun-Meta"){
+    }else if(key.substr(0, 12) == "x-upyun-meta"){
       requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
     //}else if(key == "x-amz-server-side-encryption"){
       // skip this header, because this header is specified after logic.
@@ -2691,7 +2693,7 @@ int S3fsCurl::PreMultipartPostRequest(const char* tpath, headers_t& meta, string
     //if(key.substr(0, 9) == "x-amz-acl"){
       // not set value, but after set it.
     //}else 
-    if(key.substr(0, 12) == "X-Upyun-Meta"){
+    if(key.substr(0, 12) == "x-upyun-meta"){
       requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
     //}else if(key == "x-amz-server-side-encryption"){
       // Only copy mode.
@@ -3898,6 +3900,8 @@ string get_canonical_headers(const struct curl_slist* list, bool only_amz)
       strhead       = trim(lower(strhead));
     }
     if(only_amz && strhead.substr(0, 7) != "X-Upyun"){
+      continue;
+    } else if(only_amz && strhead.substr(0, 7) != "x-upyun"){
       continue;
     }
     canonical_headers += strhead;

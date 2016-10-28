@@ -1032,50 +1032,9 @@ static int s3fs_rmdir(const char* path)
 
 static int s3fs_symlink(const char* from, const char* to)
 {
-  int result;
-  struct fuse_context* pcxt;
+  S3FS_PRN_INFO("[from=%s][to=%s] but no support symlink in upyunfs", from, to);
 
-  S3FS_PRN_INFO("[from=%s][to=%s]", from, to);
-
-  if(NULL == (pcxt = fuse_get_context())){
-    return -EIO;
-  }
-  if(0 != (result = check_parent_object_access(to, W_OK | X_OK))){
-    return result;
-  }
-  if(-ENOENT != (result = check_object_access(to, F_OK, NULL))){
-    if(0 == result){
-      result = -EEXIST;
-    }
-    return result;
-  }
-
-  headers_t headers;
-  headers["Content-Type"]     = string("application/octet-stream"); // Static
-
-  // open tmpfile
-  FdEntity* ent;
-  if(NULL == (ent = FdManager::get()->Open(to, &headers, 0, -1, true, true))){
-    S3FS_PRN_ERR("could not open tmpfile(errno=%d)", errno);
-    return -errno;
-  }
-  // write
-  ssize_t from_size = strlen(from);
-  if(from_size != ent->Write(from, 0, from_size)){
-    S3FS_PRN_ERR("could not write tmpfile(errno=%d)", errno);
-    FdManager::get()->Close(ent);
-    return -errno;
-  }
-  // upload
-  if(0 != (result = ent->Flush(true))){
-    S3FS_PRN_WARN("could not upload tmpfile(result=%d)", result);
-  }
-  FdManager::get()->Close(ent);
-
-  StatCache::getStatCacheData()->DelStat(to);
-  S3FS_MALLOCTRIM(0);
-
-  return result;
+  return -EACCES;
 }
 
 static int rename_object(const char* from, const char* to)
