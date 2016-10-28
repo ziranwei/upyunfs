@@ -1647,17 +1647,6 @@ bool S3fsCurl::RemakeHandle(void)
       curl_easy_setopt(hCurl, CURLOPT_READDATA, (void*)this);
       break;
 
-    case REQTYPE_COPYMULTIPOST:
-      curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
-      curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);
-      curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
-      curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)headdata);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, WriteMemoryCallback);
-      curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);
-      curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
-      break;
-
     case REQTYPE_MULTILIST:
       curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
       curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
@@ -3188,120 +3177,6 @@ int S3fsCurl::UploadMultipartPostRequest(const char* tpath, int part_num, const 
   return result;
 }
 
-int S3fsCurl::CopyMultipartPostRequest(const char* from, const char* to, int part_num, string& upload_id, headers_t& meta)
-{
-  S3FS_PRN_INFO3("[from=%s][to=%s][part=%d]", SAFESTRPTR(from), SAFESTRPTR(to), part_num);
-
-  if(!from || !to){
-    return -1;
-  }
-  if(!CreateCurlHandle(true)){
-    return -1;
-  }
-  string urlargs  = "?partNumber=" + str(part_num) + "&uploadId=" + upload_id;
-  string resource;
-  string turl;
-  MakeUrlResource(get_realpath(to).c_str(), resource, turl);
-
-  resource       += urlargs;
-  turl           += urlargs;
-  url             = prepare_url(turl.c_str());
-  path            = get_realpath(to);
-  requestHeaders  = NULL;
-  responseHeaders.clear();
-  bodydata        = new BodyData();
-  headdata        = new BodyData();
-
-  // Make request headers
-  string ContentType;
-  for(headers_t::iterator iter = meta.begin(); iter != meta.end(); ++iter){
-    string key   = lower(iter->first);
-    string value = iter->second;
-    if(key == "content-type"){
-      ContentType    = value;
-      requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
-    //}else if(key == "x-amz-copy-source"){
-    //  requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
-    //}else if(key == "x-amz-copy-source-range"){
-    //  requestHeaders = curl_slist_sort_insert(requestHeaders, iter->first.c_str(), value.c_str());
-    }
-    // NOTICE: x-amz-acl, x-amz-server-side-encryption is not set!
-  }
-
-  string date    = get_date_rfc850();
-  requestHeaders = curl_slist_sort_insert(requestHeaders, "Date", date.c_str());
-
-  if(!S3fsCurl::IsPublicBucket()){
-    string Signature = CalcSignatureV2("PUT", "", ContentType, date, resource);
-    requestHeaders   = curl_slist_sort_insert(requestHeaders, "Authorization", string("UpYun " + UpYunUsername + ":" + Signature).c_str());
-  }
-
-  // setopt
-  curl_easy_setopt(hCurl, CURLOPT_URL, url.c_str());
-  curl_easy_setopt(hCurl, CURLOPT_UPLOAD, true);                // HTTP PUT
-  curl_easy_setopt(hCurl, CURLOPT_WRITEDATA, (void*)bodydata);
-  curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-  curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)headdata);
-  curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, WriteMemoryCallback);
-  curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);               // Content-Length
-  curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
-  S3fsCurl::AddUserAgent(hCurl);                                // put User-Agent
-
-  type = REQTYPE_COPYMULTIPOST;
-
-  // request
-  S3FS_PRN_INFO3("copying... [from=%s][to=%s][part=%d]", from, to, part_num);
-
-  int result = RequestPerform();
-  if(0 == result){
-    // parse ETag from response
-  }
-
-  delete bodydata;
-  bodydata = NULL;
-  delete headdata;
-  headdata = NULL;
-
-  return result;
-}
-
-int S3fsCurl::MultipartHeadRequest(const char* tpath, off_t size, headers_t& meta, bool is_copy)
-{
-  int            result;
-  string         upload_id;
-  off_t          chunk;
-  off_t          bytes_remaining;
-  etaglist_t     list;
-  stringstream   strrange;
-
-  S3FS_PRN_INFO3("[tpath=%s]", SAFESTRPTR(tpath));
-
-  if(0 != (result = PreMultipartPostRequest(tpath, meta, upload_id, is_copy))){
-    return result;
-  }
-  DestroyCurlHandle();
-
-  for(bytes_remaining = size, chunk = 0; 0 < bytes_remaining; bytes_remaining -= chunk){
-    chunk = bytes_remaining > MAX_MULTI_COPY_SOURCE_SIZE ? MAX_MULTI_COPY_SOURCE_SIZE : bytes_remaining;
-
-    strrange << "bytes=" << (size - bytes_remaining) << "-" << (size - bytes_remaining + chunk - 1);
-    //meta["x-amz-copy-source-range"] = strrange.str();
-    strrange.str("");
-    strrange.clear(stringstream::goodbit);
-
-    if(0 != (result = CopyMultipartPostRequest(tpath, tpath, (list.size() + 1), upload_id, meta))){
-      return result;
-    }
-    list.push_back(partdata.etag);
-    DestroyCurlHandle();
-  }
-
-  if(0 != (result = CompleteMultipartPostRequest(tpath, upload_id, list))){
-    return result;
-  }
-  return 0;
-}
-
 int S3fsCurl::MultipartUploadRequest(const char* tpath, headers_t& meta, int fd, bool is_copy)
 {
   int            result;
@@ -3395,50 +3270,6 @@ int S3fsCurl::MultipartUploadRequest(const string& upload_id, const char* tpath,
   DestroyCurlHandle();
   close(fd2);
 
-  return 0;
-}
-
-int S3fsCurl::MultipartRenameRequest(const char* from, const char* to, headers_t& meta, off_t size)
-{
-  int            result;
-  string         upload_id;
-  off_t          chunk;
-  off_t          bytes_remaining;
-  etaglist_t     list;
-  stringstream   strrange;
-
-  S3FS_PRN_INFO3("[from=%s][to=%s]", SAFESTRPTR(from), SAFESTRPTR(to));
-
-  string srcresource;
-  string srcurl;
-  MakeUrlResource(get_realpath(from).c_str(), srcresource, srcurl);
-
-  meta["Content-Type"]      = S3fsCurl::LookupMimeType(string(to));
-  //meta["x-amz-copy-source"] = srcresource;
-
-  if(0 != (result = PreMultipartPostRequest(to, meta, upload_id, true))){
-    return result;
-  }
-  DestroyCurlHandle();
-
-  for(bytes_remaining = size, chunk = 0; 0 < bytes_remaining; bytes_remaining -= chunk){
-    chunk = bytes_remaining > MAX_MULTI_COPY_SOURCE_SIZE ? MAX_MULTI_COPY_SOURCE_SIZE : bytes_remaining;
-
-    strrange << "bytes=" << (size - bytes_remaining) << "-" << (size - bytes_remaining + chunk - 1);
-    //meta["x-amz-copy-source-range"] = strrange.str();
-    strrange.str("");
-    strrange.clear(stringstream::goodbit);
-
-    if(0 != (result = CopyMultipartPostRequest(from, to, (list.size() + 1), upload_id, meta))){
-      return result;
-    }
-    list.push_back(partdata.etag);
-    DestroyCurlHandle();
-  }
-
-  if(0 != (result = CompleteMultipartPostRequest(to, upload_id, list))){
-    return result;
-  }
   return 0;
 }
 

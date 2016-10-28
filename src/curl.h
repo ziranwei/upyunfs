@@ -197,7 +197,6 @@ class S3fsCurl
       REQTYPE_PREMULTIPOST,
       REQTYPE_COMPLETEMULTIPOST,
       REQTYPE_UPLOADMULTIPOST,
-      REQTYPE_COPYMULTIPOST,
       REQTYPE_MULTILIST,
       REQTYPE_ABORTMULTIUPLOAD
     };
@@ -311,7 +310,6 @@ class S3fsCurl
     bool GetXErrorCode(long &error_code);
 
     int UploadMultipartPostSetup(const char* tpath, int part_num, const std::string& upload_id);
-    int CopyMultipartPostRequest(const char* from, const char* to, int part_num, std::string& upload_id, headers_t& meta);
 
   public:
     // class methods
@@ -394,7 +392,6 @@ class S3fsCurl
     int MultipartHeadRequest(const char* tpath, off_t size, headers_t& meta, bool is_copy);
     int MultipartUploadRequest(const char* tpath, headers_t& meta, int fd, bool is_copy);
     int MultipartUploadRequest(const std::string& upload_id, const char* tpath, int fd, off_t offset, size_t size, etaglist_t& list);
-    int MultipartRenameRequest(const char* from, const char* to, headers_t& meta, off_t size);
     
     int PreMultipartPutRequest(const char* tpath, headers_t& meta, std::string& multi_uuid, std::string& next_part_id, int fd);
     int UploadMultipartPutSetup(const char* tpath, const std::string& multi_uuid, std::string& next_part_id);
