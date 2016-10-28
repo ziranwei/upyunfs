@@ -1552,6 +1552,8 @@ bool S3fsCurl::RemakeHandle(void)
 
   // reset handle
   ResetHandle();
+  curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
+  curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
 
   // set options
   switch(type){
@@ -1567,8 +1569,6 @@ bool S3fsCurl::RemakeHandle(void)
       curl_easy_setopt(hCurl, CURLOPT_FILETIME, true);
       curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
       // responseHeaders
-      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
       break;
 
     case REQTYPE_PUTHEAD:
@@ -1622,8 +1622,6 @@ bool S3fsCurl::RemakeHandle(void)
       curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
       curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
       curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);             // Content-Length: 0
-      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
 
       break;
 
@@ -1634,8 +1632,6 @@ bool S3fsCurl::RemakeHandle(void)
       curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
       curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
       curl_easy_setopt(hCurl, CURLOPT_INFILESIZE, 0);             // Content-Length: 0
-      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
       break;
 
     case REQTYPE_UPLOADMULTIPOST:
@@ -1645,8 +1641,6 @@ bool S3fsCurl::RemakeHandle(void)
       curl_easy_setopt(hCurl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
       curl_easy_setopt(hCurl, CURLOPT_HTTPHEADER, requestHeaders);
       curl_easy_setopt(hCurl, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(partdata.size)); // Content-Length
-      curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
-      curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
       curl_easy_setopt(hCurl, CURLOPT_READFUNCTION, S3fsCurl::UploadReadCallback);
       curl_easy_setopt(hCurl, CURLOPT_READDATA, (void*)this);
       break;
@@ -1699,6 +1693,7 @@ int S3fsCurl::RequestPerform(void)
   for(int retrycnt = S3fsCurl::retries; 0 < retrycnt; retrycnt--){
     // Requests
     CURLcode curlCode = curl_easy_perform(hCurl);
+    long error_code = 0;
 
     // Check result
     switch(curlCode){
@@ -1708,20 +1703,22 @@ int S3fsCurl::RequestPerform(void)
           S3FS_PRN_ERR("curl_easy_getinfo failed while trying to retrieve HTTP response code");
           return -EIO;
         }
+        
+        if(GetXErrorCode(error_code)) {
+          if(error_code / 100000 != LastResponseCode) {
+            S3FS_PRN_ERR("curl_easy_getinfo HTTP response code: %ld, but x_error_code: %lu", LastResponseCode, error_code);
+            LastResponseCode = error_code / 100000;
+          }
+        }
         if(429 == LastResponseCode) {
           S3FS_PRN_INFO3("HTTP response code %ld", LastResponseCode);
           sleep(4);
           break; 
         }
-        if(503 == LastResponseCode) {
-          unsigned long error_code;
-          if(GetXErrorCode(error_code)) {
-            if(error_code == 50300020) {
-              S3FS_PRN_INFO3("HTTP response code %ld, error_code: %lu", LastResponseCode, error_code);
-              sleep(4);
-              break;
-            }
-          }
+        if(503 == LastResponseCode && error_code == 50300020) {
+          S3FS_PRN_INFO3("HTTP response code %ld, error_code: %lu", LastResponseCode, error_code);
+          sleep(4);
+          break;
         }
         if(400 > LastResponseCode){
           S3FS_PRN_INFO3("HTTP response code %ld", LastResponseCode);
@@ -1942,7 +1939,7 @@ bool S3fsCurl::GetNextPartID(string& next_part_id)
   return false;
 }
  
-bool S3fsCurl::GetXErrorCode(unsigned long &error_code) {
+bool S3fsCurl::GetXErrorCode(long &error_code) {
   if(responseHeaders.find("X-Error-Code") != responseHeaders.end()){
     error_code = atol(responseHeaders["X-Error-Code"].c_str());
     return true;

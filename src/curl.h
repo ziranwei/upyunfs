@@ -308,7 +308,7 @@ class S3fsCurl
     bool GetUploadId(std::string& upload_id);
     bool GetMultiUUID(std::string& multi_uuid);
     bool GetNextPartID(std::string& next_part_id);
-    bool GetXErrorCode(unsigned long &error_code);
+    bool GetXErrorCode(long &error_code);
 
     int UploadMultipartPostSetup(const char* tpath, int part_num, const std::string& upload_id);
     int CopyMultipartPostRequest(const char* from, const char* to, int part_num, std::string& upload_id, headers_t& meta);

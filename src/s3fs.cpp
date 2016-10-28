@@ -1025,10 +1025,6 @@ static int s3fs_rmdir(const char* path)
 
   // check for "_$folder$" object.
   // This processing is necessary for other S3 clients compatibility.
-  if(is_special_name_folder_object(strpath.c_str())){
-    strpath += "_$folder$";
-    result   = s3fscurl.DeleteRequest(strpath.c_str());
-  }
   S3FS_MALLOCTRIM(0);
 
   return result;
