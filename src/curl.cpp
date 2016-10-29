@@ -1208,6 +1208,7 @@ int S3fsCurl::ParallelMultipartUploadRequest(const char* tpath, headers_t& meta,
         delete s3fscurl_para;
         return result;
       }
+      delete s3fscurl_para;
       s3fscurl.DestroyCurlHandle();
     }
   }
@@ -1286,6 +1287,7 @@ int S3fsCurl::ParallelGetObjectRequest(const char* tpath, int fd, off_t start, s
         delete s3fscurl_para;
         return -1;
       }
+      delete s3fscurl_para;
     }
 
     // Multi request
@@ -1554,6 +1556,7 @@ bool S3fsCurl::RemakeHandle(void)
 
   // reset handle
   ResetHandle();
+  responseHeaders.clear();
   curl_easy_setopt(hCurl, CURLOPT_HEADERDATA, (void*)&responseHeaders);
   curl_easy_setopt(hCurl, CURLOPT_HEADERFUNCTION, HeaderCallback);
 
