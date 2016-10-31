@@ -58,7 +58,7 @@ chmod 640 /etc/passwd-upyunfs
 将upyun bucket mount到指定目录
 
 ```
-upyunfs my-bucket my-mount-point -ourl=my-upyun-endpoint
+sudo pyunfs my-bucket my-mount-point -ourl=my-upyun-endpoint -o allow_other
 ```
 #### 示例
 
@@ -69,7 +69,7 @@ password是`123`，upyun endpoint是`v0.api.upyun.com`
 echo my-bucket:faint:123 > /etc/passwd-upyunfs
 chmod 640 /etc/passwd-upyunfs
 mkdir /tmp/upyunfs
-upyunfs my-bucket /tmp/upyunfs -o url=v0.api.upyun.com
+sudo upyunfs my-bucket /tmp/upyunfs -o url=v0.api.upyun.com -o allow_other
 ```
 
 卸载bucket:
